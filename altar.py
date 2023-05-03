@@ -9,11 +9,8 @@ from model.osrs.osrs_bot import OSRSBot
 from utilities.api.morg_http_client import MorgHTTPSocket
 from utilities.api.status_socket import StatusSocket
 
-# BUGS:
-# - Colossal pouch and altar are clicked, beven when out of essence
-# - NPC contact should be doen over 6-7 runs
-
 class OSRSAltar(OSRSBot):
+
     def __init__(self):
         bot_title = "ZMI Altar runner"
         description = "Runs to the ourania Altar. Required 85 runecrafting already."
@@ -27,28 +24,46 @@ class OSRSAltar(OSRSBot):
         
 
     def create_options(self):
+        self.options_builder.add_dropdown_option("pouch","Use pouch?",["no","colossal_pouch"])
         self.options_builder.add_slider_option("running_time", "How long to run (minutes)?", 1, 300)
+        self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
 
     def save_options(self, options: dict):
         for option in options:
+
             if option == "running_time":
                 self.running_time = options[option]
+
+            elif option == "pouch":
+                self.pouch = options[option]
+
+            elif option == "min_run_energy":
+                self.min_run_energy = options[option]
+                
             else:
                 self.log_msg(f"Unknown option: {option}")
                 print("Developer: ensure that the option keys are correct, and that options are being unpacked correctly.")
                 self.options_set = False
                 return
+            
         self.log_msg(f"Running time: {self.running_time} minutes.")
+        self.log_msg("Using pouch(es): " + self.pouch)
         self.log_msg("Options set successfully.")
         self.options_set = True
 
     def main_loop(self):
+
+        # Set rounds to 0 when starting bot
         self.round_since = 0
+
+        # Save starting XP
         self.starting_xp = self.api_m.get_skill_xp(skill="Runecraft")
 
         # Main loop
         start_time = time.time()
         end_time = self.running_time * 60
+
+        # Set a variable to store total runs
         i = 0
      
         while time.time() - start_time < end_time:
@@ -85,7 +100,7 @@ class OSRSAltar(OSRSBot):
                 self.log_msg("Aborted handle_altar")
                 break
 
-            if self.round_since > 3:
+            if self.round_since > 3 and not self.pouch == "no":
                 if self.api_m.get_if_item_in_inv(ids.COSMIC_RUNE):
                     if self.maybe_click_npc_talk():
                         self.round_since = 0
@@ -122,18 +137,19 @@ class OSRSAltar(OSRSBot):
         return True
             
     def handle_altar(self):
-        
-
         loop = True
         first = True
 
-        
         while loop:
-
             # First time clicking altar with set parameter
             if first:
                 self.click_altar(True)
                 first = False
+
+                # If no pouched used, break the loop.
+                if self.pouch == "no":
+                    break
+
                 continue
 
             # If inv contains pure essence, click_altar
@@ -152,12 +168,7 @@ class OSRSAltar(OSRSBot):
                         self.click_altar()
                     break
                     
-
-
         self.click_teleport()
-
-        
-
         return True
     
     def maybe_click_npc_talk(self):
@@ -189,10 +200,6 @@ class OSRSAltar(OSRSBot):
                         
                         dark_mage  = pyautogui.locateOnScreen(dark_mage_img,confidence=0.8)
                         if dark_mage:
-                            
-                            #self.log_msg("Clicking dark mage contact")
-                            # Move to a random point
-                            
                             break
                         time.sleep(2/10)
                         if dark_mage_tries == 20:
@@ -214,18 +221,8 @@ class OSRSAltar(OSRSBot):
                 time.sleep(10)
                 if tries > 3:
                     return False
-
-
-
-
-
-               
-
-            else:
-                self.log_msg('NPC contact not found')
-                return False
-
         return True
+    
     def random_point(self, left, top, width, height):
         x = random.randint(left, left+width)
         y = random.randint(top, top+height)
@@ -298,8 +295,7 @@ class OSRSAltar(OSRSBot):
             self.mouse.move_to(ourania_teleport.random_point())
             time.sleep(2/10)
 
-            if tries > 5:
-                
+            if tries > 5:           
                 self.log_msg('Failed to find Ouran')
                 break
 
@@ -331,22 +327,22 @@ class OSRSAltar(OSRSBot):
         # Click pure essence once
         if not self.click_pure_essence():
             return False
-        
-        # Click pouch
-        if not self.click_colossal_pouch(False, "Fill"):
-            return False
-        
-        # Click pure essence once
-        if not self.click_pure_essence():
-            return False
-        
-        # Click pouch
-        if not self.click_colossal_pouch(False, "Fill"):
-            return False
-        
-        # Click pure essence once
-        if not self.click_pure_essence():
-            return False
+        if self.pouch == "colossal_pouch":
+            # Click pouch
+            if not self.click_colossal_pouch(False, "Fill"):
+                return False
+            
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+            
+            # Click pouch
+            if not self.click_colossal_pouch(False, "Fill"):
+                return False
+            
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
         
         # Success
         pyautogui.press('esc')  
@@ -469,7 +465,7 @@ class OSRSAltar(OSRSBot):
     
     def maybe_drink_potion(self):
 
-        if self.get_run_energy() < 55:
+        if self.get_run_energy() < self.min_run_energy:
             stamina_potion1_img = imsearch.BOT_IMAGES.joinpath("items", "stamina_potion1.png")
             if stamina_potion1 := imsearch.search_img_in_rect(stamina_potion1_img, self.win.game_view):
                 # Found image
@@ -565,7 +561,7 @@ class OSRSAltar(OSRSBot):
                     deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
                     time.sleep(3/10)
                 self.log_msg("bank opened")
-                if len(self.api_s.get_inv()) != 2:
+                if len(self.api_s.get_inv()) > 2:
                     
                     # self.log_msg("Bank opened")
                     # While Deposit is not in text, move mouse.
@@ -688,7 +684,7 @@ class OSRSAltar(OSRSBot):
         # Save current location ID for later
         location_id = self.api_m.get_player_region_data()[2]
 
-        ladder = self.get_nearest_tag(clr.PINK)
+        ladder = self.get_nearest_tag(clr.BLUE)
         # Find ladder        
         while not ladder:
             self.set_compass_south()
@@ -696,7 +692,7 @@ class OSRSAltar(OSRSBot):
             
             self.log_msg('Cant find ladder, ajusting camera')
             time.sleep(3/10)
-            ladder = self.get_nearest_tag(clr.PINK)
+            ladder = self.get_nearest_tag(clr.BLUE)
             tries = tries + 1
             if tries > 5:
                 return False
