@@ -56,9 +56,8 @@ class OSRSAltar(OSRSBot):
 
         self.set_compass_south()
         pyautogui.scroll(-50)
-        self.move_camera(0,25)
-        self.maybe_click_npc_talk()
-        
+        self.move_camera(-1,25)
+
      
         while time.time() - start_time < end_time:
 
@@ -546,17 +545,18 @@ class OSRSAltar(OSRSBot):
 
                 self.mouse.move_to(altar.random_point())
                 if first:
-                    self.mouse.right_click()
-                    time.sleep(3/10)
-
-                    craft_runes_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "craft_rune.png")
-                    craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
-
-                    while not craft_runes:
-                        craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
+                    if not self.mouseover_text(contains="Craft"):
+                        self.mouse.right_click()
                         time.sleep(3/10)
-                        
-                    self.mouse.move_to(craft_runes.random_point())
+
+                        craft_runes_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "craft_rune.png")
+                        craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
+
+                        while not craft_runes:
+                            craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
+                            time.sleep(3/10)
+                            
+                        self.mouse.move_to(craft_runes.random_point())
                 self.mouse.click()         
                 altar_not_found = False
 
@@ -626,19 +626,20 @@ class OSRSAltar(OSRSBot):
             
             # Moving mouse to ladder
             self.mouse.move_to(ladder.random_point())
-            self.mouse.right_click()
-            time.sleep(3/10)
-
-            climb_ladder_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "climb_ladder.png")
-            climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
-
-            while not climb_ladder:
-                
+            if not self.mouseover_text(contains="Climb"):
+                self.mouse.right_click()
                 time.sleep(3/10)
+
+                climb_ladder_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "climb_ladder.png")
                 climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
-                tries = tries + 1
-                
-            self.mouse.move_to(climb_ladder.random_point())
+
+                while not climb_ladder:
+                    
+                    time.sleep(3/10)
+                    climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
+                    tries = tries + 1
+                    
+                self.mouse.move_to(climb_ladder.random_point())
             
             # Found climb, clicking ladder
             self.mouse.click()
