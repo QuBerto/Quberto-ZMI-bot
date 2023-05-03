@@ -30,13 +30,13 @@ ZMI altar bot to craft runes at the ZMI altar. This is the first bot i made in O
 
 ## Plugins  used
 
-* Entity hider
+* Entity hider\
     ![117HD](https://i.imgur.com/Q10wNIc.png)
 * Object markers
     * Be sure to read the section object markers on what objects to mark
 * 117 HD (Plugin hub)
     * set Draw distance to max (90)
-    * (optional) set all settings to lowest/off to minimize cpu/memory usage
+    * (optional) set all settings to lowest/off to minimize cpu/memory usage\
     ![117HD](https://i.imgur.com/Ki9Hp3T.png)
 * Status socket (Plugin hub)
 * Morg HTTP client (Plugin hub)
