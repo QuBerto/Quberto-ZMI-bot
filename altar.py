@@ -41,7 +41,7 @@ class OSRSAltar(OSRSBot):
             
         self.log_msg(f"Running time: {self.running_time} minutes.")
         self.log_msg("Using pouch(es): " + self.pouch)
-        self.log_msg("Drink potion below: " + self.min_run_energy + "%")
+        self.log_msg("Drink potion below: " + str(self.min_run_energy) + "%")
         self.log_msg("Options set successfully.")
         self.options_set = True
 
@@ -53,6 +53,12 @@ class OSRSAltar(OSRSBot):
         end_time = self.running_time * 60
 
         i = 0
+
+        self.set_compass_south()
+        pyautogui.scroll(-50)
+        self.move_camera(0,25)
+        self.maybe_click_npc_talk()
+        
      
         while time.time() - start_time < end_time:
 
@@ -153,19 +159,19 @@ class OSRSAltar(OSRSBot):
             time.sleep(2/10)
 
             while True:
-                npc_contact_img = imsearch.BOT_IMAGES.joinpath("spellbooks", "lunar", "NPC_Contact.png")
+                npc_contact_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "NPC_Contact.png")
                 if npc_contact := imsearch.search_img_in_rect(npc_contact_img, self.win.control_panel):
                     self.mouse.move_to(npc_contact.random_point())
                     self.mouse.right_click()
                     time.sleep(6/10)
 
-                    # This needs to be fixed
-                    dark_mage_img = "C:\\Users\\rober\\Documents\\OSRS-Bot-COLOR-main\\OSRS-Bot-COLOR-main\\src\\images\\bot\\mouse_clicks\\dark_mage.png"
-                    dark_mage  = pyautogui.locateOnScreen(dark_mage_img,confidence=0.8)
+                 
+                    dark_mage_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "dark_mage.png")
+                    dark_mage  =  imsearch.search_img_in_rect(dark_mage_img, self.win.rectangle())
                     dark_mage_tries = 0
                     dark_mage_mage_failed = False
                     while not dark_mage:
-                        dark_mage  = pyautogui.locateOnScreen(dark_mage_img,confidence=0.8)
+                        dark_mage  = imsearch.search_img_in_rect(dark_mage_img, self.win.rectangle())
                         if dark_mage:
                             break
                         time.sleep(2/10)
@@ -207,11 +213,11 @@ class OSRSAltar(OSRSBot):
             return True
     
     def do_single_dialogue(self, dialogue_num):
-        dialogue_img = imsearch.BOT_IMAGES.joinpath("mouse_clicks", "dialogue_" + dialogue_num + ".png")
+        dialogue_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "dialogue_" + dialogue_num + ".png")
         dialogue = imsearch.search_img_in_rect(dialogue_img, self.win.chat,confidence=0.01)
 
         while not dialogue:
-            time.sleep(random.randint(400,600)/100)
+            time.sleep(random.randint(400,600)/1000)
             dialogue = imsearch.search_img_in_rect(dialogue_img, self.win.chat,confidence=0.01)
 
         if dialogue_num == "1" or dialogue_num == "3":
@@ -223,20 +229,20 @@ class OSRSAltar(OSRSBot):
         
         self.log_msg("Dialogue  " + dialogue_num + " detected. [" + button + "]")
         pyautogui.press(button)
-        time.sleep((random.randint(600,800)/100))
+        time.sleep((random.randint(600,800)/1000))
         
     def click_teleport(self):
         self.mouse.move_to(self.win.cp_tabs[6].random_point(), mouseSpeed="fastest")
         self.mouse.click()
         self.invetory_open = False
 
-        ourania_teleport_img = imsearch.BOT_IMAGES.joinpath("spellbooks", "lunar", "Ourania_Teleport.png")
+        ourania_teleport_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Ourania_Teleport.png")
 
-        time.sleep((random.randint(150,250)/100))
+
         ourania_teleport = imsearch.search_img_in_rect(ourania_teleport_img, self.win.control_panel)
         while not ourania_teleport:
             ourania_teleport = imsearch.search_img_in_rect(ourania_teleport_img, self.win.control_panel)
-            time.sleep((random.randint(150,250)/100))
+            time.sleep((1/10))
         self.mouse.move_to(ourania_teleport.random_point())
 
         tries = 0
@@ -246,7 +252,7 @@ class OSRSAltar(OSRSBot):
             # Stop after 5 tries
             
             self.mouse.move_to(ourania_teleport.random_point())
-            time.sleep((random.randint(150,250)/100))
+            time.sleep((random.randint(150,250)/1000))
 
             if tries > 5:           
                 self.log_msg('Failed to find Ouran')
@@ -257,7 +263,7 @@ class OSRSAltar(OSRSBot):
         tries = 0
         lantern = self.get_nearest_tag(clr.BLUE)
         while not lantern:
-            time.sleep((random.randint(150,250)/100))
+            time.sleep((random.randint(150,250)/1000))
             lantern = self.get_nearest_tag(clr.BLUE)
             tries = tries + 1
             if tries == 18:
@@ -292,19 +298,19 @@ class OSRSAltar(OSRSBot):
                 return False
         
         # Success
-        time.sleep((random.randint(1,200)/100))
+        time.sleep((random.randint(1,200)/1000))
         pyautogui.press('esc')  
         return True
       
 
     def click_pure_essence(self, inventory_change = False):
          # Get the image path of the pouch
-        pure_essence_img = imsearch.BOT_IMAGES.joinpath("items", "Pure_essence.png")
+        pure_essence_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Pure_essence.png")
 
         if inventory_change:
             # Save current inv quantity
             current_inv_qt = len(self.api_s.get_inv())
-            time.sleep((random.randint(500,700)/100))
+            time.sleep((random.randint(500,700)/1000))
             new_inv = current_inv_qt
             self.log_msg('Waiting for inventory change: True')
 
@@ -338,7 +344,7 @@ class OSRSAltar(OSRSBot):
                     if tries > 5:
                         self.log_msg('No inventory change detected')
                         return False
-                    time.sleep((random.randint(350,450)/100))
+                    time.sleep((random.randint(350,450)/1000))
                     tries = tries + 1
                     new_inv = len(self.api_s.get_inv())
             
@@ -352,12 +358,12 @@ class OSRSAltar(OSRSBot):
     # Function to click on colossal pouch
     def click_colossal_pouch(self, inventory_change = False, empty_fill = "Empty"):
         # Get the image path of the pouch
-        colossal_pouch_img = imsearch.BOT_IMAGES.joinpath("items", "Colossal_pouch.png")
+        colossal_pouch_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Colossal_pouch.png")
 
         if inventory_change:
             # Save current inv quantity
             current_inv_qt = len(self.api_s.get_inv())
-            time.sleep(6/10)
+            time.sleep(1/10)
             new_inv = current_inv_qt
             self.log_msg('Waiting for inventory change: True')
 
@@ -407,7 +413,7 @@ class OSRSAltar(OSRSBot):
     
     def maybe_drink_potion(self):
         if self.get_run_energy() < self.min_run_energy:
-            stamina_potion1_img = imsearch.BOT_IMAGES.joinpath("items", "stamina_potion1.png")
+            stamina_potion1_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "stamina_potion1.png")
             if stamina_potion1 := imsearch.search_img_in_rect(stamina_potion1_img, self.win.game_view):
                 # Found image
                 # self.log_msg('Move to potion')
@@ -450,7 +456,7 @@ class OSRSAltar(OSRSBot):
 
     def open_and_deposit(self):
         # Get the path to the image
-        deposit_all_img = imsearch.BOT_IMAGES.joinpath("bank", "deposit_all.png")
+        deposit_all_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "deposit_all.png")
 
         banker = self.get_nearest_tag(clr.CYAN)
         tries = 0
@@ -543,7 +549,7 @@ class OSRSAltar(OSRSBot):
                     self.mouse.right_click()
                     time.sleep(3/10)
 
-                    craft_runes_img = imsearch.BOT_IMAGES.joinpath("mouse_clicks", "craft_rune.png")
+                    craft_runes_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "craft_rune.png")
                     craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
 
                     while not craft_runes:
@@ -623,7 +629,7 @@ class OSRSAltar(OSRSBot):
             self.mouse.right_click()
             time.sleep(3/10)
 
-            climb_ladder_img = imsearch.BOT_IMAGES.joinpath("mouse_clicks", "climb_ladder.png")
+            climb_ladder_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "climb_ladder.png")
             climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
 
             while not climb_ladder:
