@@ -19,32 +19,71 @@ class OSRSAltar(OSRSBot):
         self.invetory_open = False
         self.api_m = MorgHTTPSocket()
         self.api_s = StatusSocket()
+         # define a dictionary
+        self.types_pouches = { "small": 1,  "medium": 2,   "large": 3,  "giant":4 }
+
+  
         
     def create_options(self):
         self.options_builder.add_slider_option("running_time", "How long to run (minutes)?", 1, 300)
-        self.options_builder.add_dropdown_option("pouch","Use pouch?",["no","colossal_pouch"])
+        
         self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
-
+        self.options_builder.add_slider_option("panic_stop", "Stop if HP falls below", 1, 99)
+        
+        self.options_builder.add_checkbox_option("pouch","Use pouch?",["Small_pouch","Medium_pouch","Large_pouch","Colossal_pouch"])
+        self.options_builder.add_checkbox_option("debug_on", "Turn debug log on?", ["on"])  
     def save_options(self, options: dict):
+        self.debug_on = False
         for option in options:
             if option == "running_time":
                 self.running_time = options[option]
             elif option == "pouch":
+                if "Colossal_pouch" in options[option]:
+                    if not self.is_only_value_in_list(options[option],"Colossal_pouch"):
+                        print("Cant choose colossal pouch with any other pouch.")
+                        self.options_set = False
+                        return
                 self.pouch = options[option]
             elif option == "min_run_energy":
                 self.min_run_energy = options[option]        
+            elif option == "panic_stop":
+                self.panic_stop = options[option] 
+            elif option == "debug_on":
+                if "on" in options[option]:
+                    self.debug_on = True
+
+                
+
             else:
                 self.log_msg(f"Unknown option: {option}")
                 print("Developer: ensure that the option keys are correct, and that options are being unpacked correctly.")
                 self.options_set = False
                 return
-            
+        separator = ", "
+        result = separator.join(self.pouch)
+
         self.log_msg(f"Running time: {self.running_time} minutes.")
-        self.log_msg("Using pouch(es): " + self.pouch)
+        self.log_msg("Using pouch(es): " + result)
         self.log_msg("Drink potion below: " + str(self.min_run_energy) + "%")
         self.log_msg("Options set successfully.")
+        if self.debug_on:
+            self.log_msg("Debug is on.")
+
         self.options_set = True
 
+    def is_only_value_in_list(self, lst, value):
+        """
+        Returns True if the given value is the only element in the list,
+        and False otherwise.
+        """
+        if len(lst) == 1 and lst[0] == value:
+            return True
+        else:
+            return False
+        
+    def debug(self, msg):
+        if self.debug_on:
+            self.log_msg(msg)
     def main_loop(self):
         self.round_since = 0
         self.starting_xp = self.api_m.get_skill_xp(skill="Runecraft")
@@ -56,7 +95,6 @@ class OSRSAltar(OSRSBot):
 
         self.set_compass_south()
         pyautogui.scroll(-50)
-        self.move_camera(-1,25)
 
      
         while time.time() - start_time < end_time:
@@ -72,21 +110,21 @@ class OSRSAltar(OSRSBot):
 
             # Outside
             if self.api_m.get_player_region_data()[2] == 9778:
-                self.log_msg("Starting click_ladder")
+                self.debug("Starting click_ladder")
                 if not self.click_ladder():
                     self.log_msg("Aborted click_ladder")
                     break
             
             # Bank area
             if self.api_m.get_player_region_data()[2] == 12119:
-                self.log_msg("Starting handle_banking")
+                self.debug("Starting handle_banking")
                 if not self.handle_banking():
                     self.log_msg("Aborted handle_banking")
                     break
 
             time.sleep(1)
 
-            self.log_msg("Starting handle_altar")
+            self.debug("Starting handle_altar")
             if not self.handle_altar():
                 self.log_msg("Aborted handle_altar")
                 break
@@ -100,6 +138,10 @@ class OSRSAltar(OSRSBot):
             i = i + 1
             self.update_progress((time.time() - start_time) / end_time)
 
+            if self.panic_stop > self.get_hp():
+                self.log_msg("HP too low, quitting")
+                break
+
         self.update_progress(1)
         str_msg = "XP Gained: " + str( self.api_m.get_skill_xp(skill="Runecraft") - self.starting_xp )
         self.log_msg(str_msg)
@@ -108,15 +150,15 @@ class OSRSAltar(OSRSBot):
         self.stop()
 
     def handle_banking(self):
-        self.log_msg("Start open_and_deposit")
+        self.debug("Start open_and_deposit")
         if not self.open_and_deposit():
             return False
         
-        self.log_msg("Start maybe_drink_potion")
+        self.debug("Start maybe_drink_potion")
         if not self.maybe_drink_potion():
             return False
         
-        self.log_msg("Start get_items_and_close")
+        self.debug("Start get_items_and_close")
         if not self.get_items_and_close():
             return False
         
@@ -125,34 +167,46 @@ class OSRSAltar(OSRSBot):
     def handle_altar(self):
         loop = True
         first = True
-
+        not_clicked_pouch = self.pouch
+     
         while loop:
             if first:
                 self.click_altar(True)
                 first = False
 
-                if self.pouch == "no":
-                    break
+                
                 continue
 
             if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
                 self.click_altar()
-            else:
-                self.click_colossal_pouch(True)
-                if len(self.api_s.get_inv()) == 28:
-                    continue
+                
+            if len(not_clicked_pouch) == 0:
+                break
 
-                if len(self.api_s.get_inv()) != 28:
-                    if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
-                        self.click_altar()
-                    break
+            else:
+
+                if "Colossal_pouch" in self.pouch:
+
+                    self.click_pouch(type_pouch="Colossal_pouch", inventory_change=True)
+                    if len(self.api_s.get_inv()) == 28:
+                        continue
+
+                    if len(self.api_s.get_inv()) != 28:
+                        if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
+                            self.click_altar()
+                        break
+
+                else:
+                    random_value = random.choice(not_clicked_pouch)
+                    self.click_pouch(type_pouch=random_value, inventory_change=True)
+                    not_clicked_pouch.remove(random_value)
                     
         self.click_teleport()
         return True
     
     def maybe_click_npc_talk(self):
         if self.api_m.get_if_item_in_inv(ids.COSMIC_RUNE):
-            self.log_msg("Repairing pouch sequence started")
+            self.debug("Repairing pouch sequence started")
             tries = 0
 
             time.sleep(2/10)
@@ -179,14 +233,12 @@ class OSRSAltar(OSRSBot):
                             dark_mage_mage_failed = True
                             break 
                         dark_mage_tries = dark_mage_tries + 1
-                        self.log_msg(dark_mage_tries)
+                        self.debug(dark_mage_tries)
 
                     if dark_mage_mage_failed:
                         continue
 
-                    point = self.random_point(dark_mage.left, dark_mage.top, dark_mage.width, dark_mage.height)
-                    
-                    self.mouse.move_to( destination=(point[0],point[1]))
+                    self.mouse.move_to( destination=dark_mage.random_point())
                     self.mouse.click()
 
                     self.do_dialogue()
@@ -198,10 +250,7 @@ class OSRSAltar(OSRSBot):
                 
         return True
     
-    def random_point(self, left, top, width, height):
-        x = random.randint(left, left+width)
-        y = random.randint(top, top+height)
-        return (x, y)
+
 
     def do_dialogue(self):
         time.sleep(3)
@@ -226,7 +275,7 @@ class OSRSAltar(OSRSBot):
         elif dialogue_num == "4":
             return True
         
-        self.log_msg("Dialogue  " + dialogue_num + " detected. [" + button + "]")
+        self.debug("Dialogue  " + dialogue_num + " detected. [" + button + "]")
         pyautogui.press(button)
         time.sleep((random.randint(600,800)/1000))
         
@@ -279,27 +328,73 @@ class OSRSAltar(OSRSBot):
         # Click pure essence once
         if not self.click_pure_essence():
             return False
-        if self.pouch == "colossal_pouch":
+        if "Colossal_pouch" in self.pouch:
+
+            self.debug("Colossal pouch first")
+            if not self.click_pouch(type_pouch="Colossal_pouch", inventory_change=False, empty_fill="Fill"):
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+            
+            self.debug("Colossal pouch second")
             # Click pouch
-            if not self.click_colossal_pouch(False, "Fill"):
+            if not self.click_pouch(type_pouch="Colossal_pouch", inventory_change=False, empty_fill="Fill"):
                 return False
             
             # Click pure essence once
             if not self.click_pure_essence():
                 return False
+             # Success
+            time.sleep((random.randint(1,200)/1000))
+            pyautogui.press('esc')  
+            return True
             
-            # Click pouch
-            if not self.click_colossal_pouch(False, "Fill"):
+
+        
+        if 'Small_pouch' in self.pouch:
+            self.debug("Small pouch")
+            if not self.click_pouch(type_pouch="Small_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Failed Small")
                 return False
-            
             # Click pure essence once
             if not self.click_pure_essence():
                 return False
         
+        
+        if 'Medium_pouch' in self.pouch:
+            self.debug("Medium pouch")
+            if not self.click_pouch(type_pouch="Medium_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Medium Failed")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+            
+        if 'Large_pouch' in self.pouch:
+            self.debug("Large pouch")
+            if not self.click_pouch(type_pouch="Large_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Large Failed")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+            
+        if 'Giant_pouch' in self.pouch:
+            self.debug("Giant pouch")
+            if not self.click_pouch(type_pouch="Giant_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Failed Giant")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
         # Success
         time.sleep((random.randint(1,200)/1000))
         pyautogui.press('esc')  
         return True
+            
+        
+       
       
 
     def click_pure_essence(self, inventory_change = False):
@@ -311,7 +406,7 @@ class OSRSAltar(OSRSBot):
             current_inv_qt = len(self.api_s.get_inv())
             time.sleep((random.randint(500,700)/1000))
             new_inv = current_inv_qt
-            self.log_msg('Waiting for inventory change: True')
+            self.debug('Waiting for inventory change: True')
 
         # Is colossal pouch even in view? 
         if pure_essence := imsearch.search_img_in_rect(pure_essence_img, self.win.game_view,confidence=0.05):
@@ -354,23 +449,23 @@ class OSRSAltar(OSRSBot):
             self.log_msg('No essence found, are you sure those are in the bank?')
             return False
 
-    # Function to click on colossal pouch
-    def click_colossal_pouch(self, inventory_change = False, empty_fill = "Empty"):
+    # Function to click on pouch
+    def click_pouch(self, type_pouch , inventory_change = False, empty_fill = "Empty"):
         # Get the image path of the pouch
-        colossal_pouch_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Colossal_pouch.png")
+        pouch_img = imsearch.BOT_IMAGES.joinpath("altar_bot", type_pouch +".png")
 
         if inventory_change:
             # Save current inv quantity
             current_inv_qt = len(self.api_s.get_inv())
             time.sleep(1/10)
             new_inv = current_inv_qt
-            self.log_msg('Waiting for inventory change: True')
+            self.debug('Waiting for inventory change: True')
 
         # Is colossal pouch even in view? 
-        if colossal_pouch := imsearch.search_img_in_rect(colossal_pouch_img, self.win.control_panel):
+        if pouch := imsearch.search_img_in_rect(pouch_img, self.win.control_panel):
 
             # Move to a random point
-            self.mouse.move_to(colossal_pouch.random_point())
+            self.mouse.move_to(pouch.random_point())
 
             # Set tries to 0
             tries = 0
@@ -379,14 +474,14 @@ class OSRSAltar(OSRSBot):
             while not self.mouseover_text(contains=empty_fill):
                 # Stop after 5 tries
                 
-                self.mouse.move_to(colossal_pouch.random_point())
+                self.mouse.move_to(pouch.random_point())
                 time.sleep(2/10)
                 tries = tries + 1
                 if empty_fill == "Fill" and self.mouseover_text(contains="Depo"):
                     return True
                 if tries > 5:
                     
-                    self.log_msg('Failed to find '+empty_fill)
+                    self.log_msg('Failed to find '+ empty_fill)
                     return False
             
             # the actual click
@@ -403,7 +498,6 @@ class OSRSAltar(OSRSBot):
                     new_inv = len(self.api_s.get_inv())
    
             # completed click successfull
-            # self.log_msg('Clicked colossal pouch')
             return True
         else:
             # No pouch found on screen
@@ -456,7 +550,7 @@ class OSRSAltar(OSRSBot):
     def open_and_deposit(self):
         # Get the path to the image
         deposit_all_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "deposit_all.png")
-
+        time.sleep(2/10)
         banker = self.get_nearest_tag(clr.CYAN)
         tries = 0
         while not banker:
@@ -487,7 +581,7 @@ class OSRSAltar(OSRSBot):
                 # Does text match Bank?
                 if not self.mouseover_text(contains="Bank"):
                     # If not, start the ladder cyclus again
-                    self.log_msg('Could not locate bank, trying again')
+                    self.debug('Could not locate bank, trying again')
                     banker = self.get_nearest_tag(clr.CYAN)
                     time.sleep(3/10)
                     tries = tries + 1
@@ -500,8 +594,9 @@ class OSRSAltar(OSRSBot):
                 while not deposit_all:
                     deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
                     time.sleep(3/10)
-                self.log_msg("bank opened")
-                if len(self.api_s.get_inv()) > 2:
+                self.debug("bank opened")
+
+                if len(self.api_s.get_inv()) > len(self.pouch) + 1:
                     # While Deposit is not in text, move mouse.
                     while not self.mouseover_text(contains="inventory"):
                         # Stop after 5 tries
@@ -669,3 +764,4 @@ class OSRSAltar(OSRSBot):
                 self.log_msg('Region did not change')
                 tries = tries + 1
                 continue
+
