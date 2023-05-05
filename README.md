@@ -40,7 +40,7 @@ ZMI altar bot to craft runes at the ZMI altar. This is the first bot i made in O
     ![117HD](https://i.imgur.com/Ki9Hp3T.png)
 * Status socket (Plugin hub)
 * Morg HTTP client (Plugin hub)
-* Runecrafting utilities (Plugin hub)
+* Runecrafting utilities (Plugin hub)\
     ![117HD](https://i.imgur.com/e6ZwvUY.png)
 ## Object/NPC markers
 1. Mark the ladder outside with Blue
