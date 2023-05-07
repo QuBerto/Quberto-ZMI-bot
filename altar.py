@@ -167,13 +167,12 @@ class OSRSAltar(OSRSBot):
     def handle_altar(self):
         loop = True
         first = True
-        not_clicked_pouch = self.pouch
+        not_clicked_pouch = self.pouch.copy()
      
         while loop:
             if first:
                 self.click_altar(True)
                 first = False
-
                 
                 continue
 
