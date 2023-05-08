@@ -26,14 +26,18 @@ class OSRSAltar(OSRSBot):
         
     def create_options(self):
         self.options_builder.add_slider_option("running_time", "How long to run (minutes)?", 1, 300)
-        
         self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
         self.options_builder.add_slider_option("panic_stop", "Stop if HP falls below", 1, 99)
-        
         self.options_builder.add_checkbox_option("pouch","Use pouch?",["Small_pouch","Medium_pouch","Large_pouch","Colossal_pouch"])
+        self.options_builder.add_slider_option("repair_after", "After how many rounds, pouches should be repaired?", 1, 99)
+        self.options_builder.add_checkbox_option("repair_now", "Repair first round?", ["on"])  
         self.options_builder.add_checkbox_option("debug_on", "Turn debug log on?", ["on"])  
+        
+
     def save_options(self, options: dict):
         self.debug_on = False
+        self.repair_now = False
+
         for option in options:
             if option == "running_time":
                 self.running_time = options[option]
@@ -48,11 +52,14 @@ class OSRSAltar(OSRSBot):
                 self.min_run_energy = options[option]        
             elif option == "panic_stop":
                 self.panic_stop = options[option] 
+            elif option == "repair_after":
+                self.repair_after = options[option] 
+            elif option == "repair_now":
+                if "on" in options[option]:
+                    self.repair_now = True
             elif option == "debug_on":
                 if "on" in options[option]:
                     self.debug_on = True
-
-                
 
             else:
                 self.log_msg(f"Unknown option: {option}")
@@ -87,7 +94,7 @@ class OSRSAltar(OSRSBot):
     def main_loop(self):
         self.round_since = 0
         self.starting_xp = self.api_m.get_skill_xp(skill="Runecraft")
-
+        self.deposit_rectangle = False
         start_time = time.time()
         end_time = self.running_time * 60
 
@@ -98,14 +105,17 @@ class OSRSAltar(OSRSBot):
 
      
         while time.time() - start_time < end_time:
-
-            str_msg = "Runs: " + str(i)
-            self.log_msg(str_msg)
+            
+            str_msg = "Runs: " + str(i) + " (Last repair: "+ str(self.round_since)+" ago)"
+            self.log_msg(str_msg )
 
             str_msg = "Runs since last repair: " + str(self.round_since)
             self.log_msg(str_msg)
 
-            str_msg = "XP Gained: " + str( self.api_m.get_skill_xp(skill="Runecraft") - self.starting_xp )
+            xp_gained = self.api_m.get_skill_xp(skill="Runecraft") - self.starting_xp
+            xp_per_hour = xp_gained * (time.time() - start_time / (60 * 60))
+
+            str_msg = "XP Gained: " + str( xp_gained ) + " ("+str(xp_per_hour)+" xp/h)"
             self.log_msg(str_msg)
 
             # Outside
@@ -122,17 +132,16 @@ class OSRSAltar(OSRSBot):
                     self.log_msg("Aborted handle_banking")
                     break
 
-            time.sleep(1)
-
             self.debug("Starting handle_altar")
             if not self.handle_altar():
                 self.log_msg("Aborted handle_altar")
                 break
 
-            if self.round_since > 3 and not self.pouch == "no":
+            if self.round_since > self.repair_after and not self.pouch == "no" or self.repair_now == True:
                 if self.api_m.get_if_item_in_inv(ids.COSMIC_RUNE):
                     if self.maybe_click_npc_talk():
                         self.round_since = 0
+                        self.repair_now = False
 
             self.round_since = self.round_since + 1 
             i = i + 1
@@ -173,7 +182,7 @@ class OSRSAltar(OSRSBot):
             if first:
                 self.click_altar(True)
                 first = False
-                
+
                 continue
 
             if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
@@ -580,7 +589,7 @@ class OSRSAltar(OSRSBot):
                     return False
                 
                 self.mouse.move_to(banker.random_point())
-
+                time.sleep(1/10)
                 # Does text match Bank?
                 if not self.mouseover_text(contains="Bank"):
                     # If not, start the ladder cyclus again
@@ -595,8 +604,18 @@ class OSRSAltar(OSRSBot):
                 deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
                 # Waiting till player is idle
                 while not deposit_all:
-                    deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
-                    time.sleep(3/10)
+                    
+                    if not self.deposit_rectangle:
+                        deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
+                        if deposit_all:
+                            self.deposit_rectangle = deposit_all
+                        else:
+                            time.sleep(1/10)
+                            continue
+                    else:
+                        deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.deposit_rectangle)
+                        
+                
                 self.debug("bank opened")
 
                 if len(self.api_s.get_inv()) > len(self.pouch) + 1:
@@ -637,66 +656,71 @@ class OSRSAltar(OSRSBot):
         tries = 0
         toggle_run = False
         # Find 
-        if altar := self.get_nearest_tag(clr.PINK):
-            altar_not_found = True
-            while altar_not_found:
+        altar = self.get_nearest_tag(clr.PINK)
+        while not altar:
+            time.sleep(1/10)
+            self.debug("cant find altar, trying again")
+            altar = self.get_nearest_tag(clr.PINK)
 
-                self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
-                if first:
-                  
-                    self.mouse.right_click()
-                    time.sleep(1/10)
+        altar_not_found = True
+        while altar_not_found:
 
-                    craft_runes_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "craft_rune.png")
-                    craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
-
-                    while not craft_runes:
-                        self.mouse.move_to(self.win.game_view.random_point())
-                        altar = self.get_nearest_tag(clr.PINK)
-                        if altar:
-                            self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
-                            self.mouse.right_click()
-                        time.sleep(3/10)
-                        craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
-                        
-                        
-                    self.mouse.move_to(craft_runes.random_point(), mouseSpeed="fastest")
-                self.mouse.click()         
-                altar_not_found = False
-
+            self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
             if first:
-                time.sleep(3)
-            
-            current_inv_qt = len(self.api_s.get_inv())
-          
-            while current_inv_qt == len(self.api_s.get_inv()):
-                if first:
-                    if not self.invetory_open:
-                        if rd.random_chance(probability=0.01):
-                            # Click the inventory tab
-                            self.mouse.move_to(self.win.cp_tabs[3].random_point())
-                            self.mouse.click()
-                            self.invetory_open = True
-                    if not toggle_run:
-                        self.toggle_run(toggle_on=True)
-                        toggle_run = True 
-                    if tries > 300:
-                        self.log_msg('Failed to complete lap')
-                        return False
-                else:
-                    if tries > 25:
-                        self.log_msg('Failed to complete lap')
-                        return False
+                
+                self.mouse.right_click()
                 time.sleep(1/10)
-                tries = tries + 1
 
+                craft_runes_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "craft_rune.png")
+                craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
+
+                while not craft_runes:
+                    self.mouse.move_to(self.win.game_view.random_point())
+                    altar = self.get_nearest_tag(clr.PINK)
+                    if altar:
+                        self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
+                        self.mouse.right_click()
+                    time.sleep(3/10)
+                    craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
+                    
+                    
+                self.mouse.move_to(craft_runes.random_point(), mouseSpeed="fastest")
+            self.mouse.click()         
+            altar_not_found = False
+
+        if first:
+            time.sleep(3)
+        
+        current_inv_qt = len(self.api_s.get_inv())
+        
+        while current_inv_qt == len(self.api_s.get_inv()):
             if first:
                 if not self.invetory_open:
-                    self.mouse.move_to(self.win.cp_tabs[3].random_point())
-                    self.mouse.click()
-                    self.invetory_open = True
-            return True
-        return False
+                    if rd.random_chance(probability=0.01):
+                        # Click the inventory tab
+                        self.mouse.move_to(self.win.cp_tabs[3].random_point())
+                        self.mouse.click()
+                        self.invetory_open = True
+                if not toggle_run:
+                    self.toggle_run(toggle_on=True)
+                    toggle_run = True 
+                if tries > 300:
+                    self.log_msg('Failed to complete lap')
+                    return False
+            else:
+                if tries > 25:
+                    self.log_msg('Failed to complete lap')
+                    return False
+            time.sleep(1/10)
+            tries = tries + 1
+
+        if first:
+            if not self.invetory_open:
+                self.mouse.move_to(self.win.cp_tabs[3].random_point())
+                self.mouse.click()
+                self.invetory_open = True
+        return True
+        
 
     def click_ladder(self):
         # Start with try 0
@@ -763,7 +787,7 @@ class OSRSAltar(OSRSBot):
             while not self.api_m.get_is_player_idle():
                 time.sleep(3/10)
                 if not self.invetory_open:
-                    if rd.random_chance(probability=0.06):
+                    if rd.random_chance(probability=0.05):
                         # Click the inventory tab
                         self.mouse.move_to(self.win.cp_tabs[3].random_point())
                         self.mouse.click()
