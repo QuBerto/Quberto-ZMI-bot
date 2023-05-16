@@ -19,24 +19,22 @@ class OSRSAltar(OSRSBot):
         self.invetory_open = False
         self.api_m = MorgHTTPSocket()
         self.api_s = StatusSocket()
-         # define a dictionary
-        self.types_pouches = { "small": 1,  "medium": 2,   "large": 3,  "giant":4 }
-
-  
         
     def create_options(self):
         self.options_builder.add_slider_option("running_time", "How long to run (minutes)?", 1, 300)
         self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
         self.options_builder.add_slider_option("panic_stop", "Stop if HP falls below", 1, 99)
         self.options_builder.add_checkbox_option("pouch","Use pouch?",["Small_pouch","Medium_pouch","Large_pouch","Colossal_pouch"])
-        self.options_builder.add_slider_option("repair_after", "After how many rounds, pouches should be repaired?", 1, 99)
+        self.options_builder.add_slider_option("repair_after", "After how many rounds, pouches should be repaired?", 1, 20)
         self.options_builder.add_checkbox_option("repair_now", "Repair first round?", ["on"])  
-        self.options_builder.add_checkbox_option("debug_on", "Turn debug log on?", ["on"])  
-        
+        self.options_builder.add_checkbox_option("debug_on", "Turn debug log on?", ["on"])        
+        self.options_builder.add_checkbox_option("insane_mode", "Turn fast mode on?", ["on"])   
 
     def save_options(self, options: dict):
         self.debug_on = False
         self.repair_now = False
+        self.insane_mode = False
+        self.mouse_speed = "fast"
 
         for option in options:
             if option == "running_time":
@@ -60,7 +58,10 @@ class OSRSAltar(OSRSBot):
             elif option == "debug_on":
                 if "on" in options[option]:
                     self.debug_on = True
-
+            elif option == "insane_mode":
+                if "on" in options[option]:
+                    self.mouse_speed = "fastest"
+                    self.insane_mode = True
             else:
                 self.log_msg(f"Unknown option: {option}")
                 print("Developer: ensure that the option keys are correct, and that options are being unpacked correctly.")
@@ -91,32 +92,28 @@ class OSRSAltar(OSRSBot):
     def debug(self, msg):
         if self.debug_on:
             self.log_msg(msg)
+
     def main_loop(self):
-        self.round_since = 0
-        self.starting_xp = self.api_m.get_skill_xp(skill="Runecraft")
-        self.deposit_rectangle = False
+        if not self.start_loop_function():
+            self.log_msg("Finished.")
+            self.logout_runelite()
+            self.stop()
+
+        i = 0
         start_time = time.time()
         end_time = self.running_time * 60
 
-        i = 0
-
-        self.set_compass_south()
-        pyautogui.scroll(-50)
-
-     
         while time.time() - start_time < end_time:
             
             str_msg = "Runs: " + str(i) + " (Last repair: "+ str(self.round_since)+" ago)"
             self.log_msg(str_msg )
 
-            str_msg = "Runs since last repair: " + str(self.round_since)
-            self.log_msg(str_msg)
-
             xp_gained = self.api_m.get_skill_xp(skill="Runecraft") - self.starting_xp
-            xp_per_hour = xp_gained * (time.time() - start_time / (60 * 60))
+            xp_per_hour = xp_gained * ((time.time() - start_time) / (60 * 60))
 
             str_msg = "XP Gained: " + str( xp_gained ) + " ("+str(xp_per_hour)+" xp/h)"
             self.log_msg(str_msg)
+            
 
             # Outside
             if self.api_m.get_player_region_data()[2] == 9778:
@@ -158,6 +155,50 @@ class OSRSAltar(OSRSBot):
         self.logout_runelite()
         self.stop()
 
+    def start_loop_function(self):
+        self.round_since = 0
+        self.starting_xp = self.api_m.get_skill_xp(skill="Runecraft")
+        self.deposit_rectangle = False
+        self.pouch_position = False
+        self.bank_position_essence = False
+        self.last_banker = False
+
+        self.set_compass_south()
+        self.open_inventory()
+        if not self.set_pouch_position():
+            return False
+        
+        pyautogui.scroll(-50)
+        return True
+
+    def set_pouch_position(self):
+        dict_pouch = {}
+        for item in self.pouch:
+            result = self.get_position_pouch(item)
+            if result:
+                print(result)
+                dict_pouch[item] = result
+            else:
+                self.log_msg("Could not find " + item)
+                self.log_msg("Is inventory opened? Does it contain " + item)
+                return False
+        self.pouch_position = dict_pouch
+        return True
+    
+    def open_inventory(self):
+        if self.invetory_open == False:
+            self.mouse.move_to(self.win.cp_tabs[3].random_point(), mouseSpeed=self.mouse_speed)
+            self.mouse.click()
+            self.invetory_open = True
+
+
+    def get_position_pouch(self, pouch):
+        pouch_img = imsearch.BOT_IMAGES.joinpath("altar_bot", pouch +".png")
+        if pouch := imsearch.search_img_in_rect(pouch_img, self.win.control_panel):
+            return pouch
+        return False
+        
+
     def handle_banking(self):
         self.debug("Start open_and_deposit")
         if not self.open_and_deposit():
@@ -186,7 +227,7 @@ class OSRSAltar(OSRSBot):
                 continue
 
             if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
-                self.click_altar()
+                self.click_altar(insane_mode=self.insane_mode)
                 
             if len(not_clicked_pouch) == 0:
                 break
@@ -195,7 +236,7 @@ class OSRSAltar(OSRSBot):
 
                 if "Colossal_pouch" in self.pouch:
 
-                    self.click_pouch(type_pouch="Colossal_pouch", inventory_change=True)
+                    self.click_pouch(type_pouch="Colossal_pouch", inventory_change=True,insane_mode=self.insane_mode)
                     if len(self.api_s.get_inv()) == 28:
                         continue
 
@@ -221,40 +262,19 @@ class OSRSAltar(OSRSBot):
 
             while True:
                 npc_contact_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "NPC_Contact.png")
-                if npc_contact := imsearch.search_img_in_rect(npc_contact_img, self.win.control_panel):
-                    self.mouse.move_to(npc_contact.random_point())
-                    self.mouse.right_click()
-                    time.sleep(6/10)
+                tries = 0
+                while not self.mouseover_text("Dark",color=clr.OFF_WHITE):
+                    npc_contact = imsearch.search_img_in_rect(npc_contact_img, self.win.control_panel)
+                    self.mouse.move_to(npc_contact.random_point(),mouseSpeed=self.mouse_speed)
+                    tries = tries + 1
+                    
+                    if tries > 3:
+                        return False
+                self.mouse.click()
 
-                 
-                    dark_mage_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "dark_mage.png")
-                    dark_mage  =  imsearch.search_img_in_rect(dark_mage_img, self.win.rectangle())
-                    dark_mage_tries = 0
-                    dark_mage_mage_failed = False
-                    while not dark_mage:
-                        dark_mage  = imsearch.search_img_in_rect(dark_mage_img, self.win.rectangle())
-                        if dark_mage:
-                            break
-                        time.sleep(2/10)
-                        if dark_mage_tries == 20:
-                            self.log_msg("failed")
-                            dark_mage_mage_failed = True
-                            break 
-                        dark_mage_tries = dark_mage_tries + 1
-                        self.debug(dark_mage_tries)
-
-                    if dark_mage_mage_failed:
-                        continue
-
-                    self.mouse.move_to( destination=dark_mage.random_point())
-                    self.mouse.click()
-
-                    self.do_dialogue()
-                    break
-                tries = tries + 1
-                time.sleep(10)
-                if tries > 3:
-                    return False
+                self.do_dialogue()
+                break
+                
                 
         return True
     
@@ -288,7 +308,7 @@ class OSRSAltar(OSRSBot):
         time.sleep((random.randint(600,800)/1000))
         
     def click_teleport(self):
-        self.mouse.move_to(self.win.cp_tabs[6].random_point(), mouseSpeed="fastest")
+        self.mouse.move_to(self.win.cp_tabs[6].random_point(), mouseSpeed=self.mouse_speed)
         self.mouse.click()
         self.invetory_open = False
 
@@ -299,7 +319,7 @@ class OSRSAltar(OSRSBot):
         while not ourania_teleport:
             ourania_teleport = imsearch.search_img_in_rect(ourania_teleport_img, self.win.control_panel)
             time.sleep((1/10))
-        self.mouse.move_to(ourania_teleport.random_point())
+        self.mouse.move_to(ourania_teleport.random_point(),mouseSpeed=self.mouse_speed)
 
         tries = 0
 
@@ -307,7 +327,7 @@ class OSRSAltar(OSRSBot):
         while not self.mouseover_text(contains="Ouran"):
             # Stop after 5 tries
             
-            self.mouse.move_to(ourania_teleport.random_point())
+            self.mouse.move_to(ourania_teleport.random_point(),mouseSpeed=self.mouse_speed)
             time.sleep((random.randint(150,250)/1000))
 
             if tries > 5:           
@@ -323,7 +343,7 @@ class OSRSAltar(OSRSBot):
             lantern = self.get_nearest_tag(clr.BLUE)
             tries = tries + 1
             if tries == 18:
-                self.mouse.move_to(ourania_teleport.random_point())
+                self.mouse.move_to(ourania_teleport.random_point(),mouseSpeed=self.mouse_speed)
                 self.mouse.click()
             if tries == 36:
                 return False
@@ -407,65 +427,56 @@ class OSRSAltar(OSRSBot):
 
     def click_pure_essence(self, inventory_change = False):
          # Get the image path of the pouch
+        
         pure_essence_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Pure_essence.png")
 
         if inventory_change:
             # Save current inv quantity
             current_inv_qt = len(self.api_s.get_inv())
-            time.sleep((random.randint(500,700)/1000))
+            time.sleep((random.randint(100,200)/1000))
             new_inv = current_inv_qt
             self.debug('Waiting for inventory change: True')
 
-        # Is colossal pouch even in view? 
-        if pure_essence := imsearch.search_img_in_rect(pure_essence_img, self.win.game_view,confidence=0.05):
+        while not self.bank_position_essence:
+            self.bank_position_essence = imsearch.search_img_in_rect(pure_essence_img, self.win.game_view,confidence=0.05)
 
-            # Move to a random point
-            self.mouse.move_to(pure_essence.random_point())
+    
 
-            # Set tries to 0
-            tries = 0
+        # Set tries to 0
+        tries = 0
 
-            # While Fill is not in text, move mouse.
-            while not self.mouseover_text(contains="Pure"):
-                # Stop after 5 tries
+        # While Fill is not in text, move mouse.
+        while not self.mouseover_text(contains="Pure"):
+            # Stop after 5 tries
+            time.sleep(1/10)
+            self.mouse.move_to(self.bank_position_essence.random_point(),mouseSpeed=self.mouse_speed)
+            
+
+            if tries > 10:
                 
-                self.mouse.move_to(pure_essence.random_point())
-                time.sleep(2/10)
+                self.log_msg('Failed to find Pure')
+                return False
+        
+        # the actual click
+        self.mouse.click()
+        if self.insane_mode:
+            self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
 
+        # If inventory change is true, execute while loop waiting for inventory change
+        if inventory_change:
+            while current_inv_qt == new_inv:
                 if tries > 5:
-                    
-                    self.log_msg('Failed to find Pure')
+                    self.log_msg('No inventory change detected')
                     return False
-            
-            # the actual click
-            self.mouse.click()
-
-            # If inventory change is true, execute while loop waiting for inventory change
-            if inventory_change:
-                while current_inv_qt == new_inv:
-                    if tries > 5:
-                        self.log_msg('No inventory change detected')
-                        return False
-                    time.sleep((random.randint(350,450)/1000))
-                    tries = tries + 1
-                    new_inv = len(self.api_s.get_inv())
-            
-            # completed click successfull
-            return True
-        else:
-            # No pouch found on screen
-            self.log_msg('No essence found, are you sure those are in the bank?')
-            return False
+                time.sleep((random.randint(200,250)/1000))
+                tries = tries + 1
+                new_inv = len(self.api_s.get_inv())
+        
+        # completed click successfull
+        return True
 
     # Function to click on pouch
-    def click_pouch(self, type_pouch , inventory_change = False, empty_fill = "Empty"):
-        # Get the image path of the pouch
-
-       
-
-
-        pouch_img = imsearch.BOT_IMAGES.joinpath("altar_bot", type_pouch +".png")
-
+    def click_pouch(self, type_pouch , inventory_change = False, empty_fill = "Empty",insane_mode=False):
         if inventory_change:
             # Save current inv quantity
             current_inv_qt = len(self.api_s.get_inv())
@@ -473,48 +484,45 @@ class OSRSAltar(OSRSBot):
             new_inv = current_inv_qt
             self.debug('Waiting for inventory change: True')
 
-        # Is colossal pouch even in view? 
-        if pouch := imsearch.search_img_in_rect(pouch_img, self.win.control_panel):
+        # Set tries to 0
+        tries = 0
 
-            # Move to a random point
-            self.mouse.move_to(pouch.random_point())
-
-            # Set tries to 0
-            tries = 0
-
-            # While Fill is not in text, move mouse.
-            while not self.mouseover_text(contains=empty_fill):
-                # Stop after 5 tries
+        # While Fill is not in text, move mouse.
+        while not self.mouseover_text(contains=empty_fill):
+            # Stop after 5 tries
+            pouch = self.pouch_position[type_pouch]
+            self.mouse.move_to(pouch.random_point(),mouseSpeed=self.mouse_speed)
+            time.sleep(1/10)
+            tries = tries + 1
+            if empty_fill == "Fill" and self.mouseover_text(contains="Depo"):
+                return True
+            if tries > 10:
                 
-                self.mouse.move_to(pouch.random_point())
-                time.sleep(2/10)
-                tries = tries + 1
-                if empty_fill == "Fill" and self.mouseover_text(contains="Depo"):
-                    return True
-                if tries > 5:
-                    
-                    self.log_msg('Failed to find '+ empty_fill)
+                self.log_msg('Failed to find '+ empty_fill)
+                return False
+        
+        # the actual click
+        self.mouse.click()
+        if insane_mode and empty_fill == "Empty":
+            altar = self.get_nearest_tag(color=clr.PINK)
+            if altar:
+                self.mouse.move_to(altar.random_point(),mouseSpeed=self.mouse_speed)
+        elif insane_mode and empty_fill == "Fill":
+            if self.bank_position_essence:
+                self.mouse.move_to(self.bank_position_essence.random_point(),mouseSpeed=self.mouse_speed)
+        
+        # If inventory change is true, execute while loop waiting for inventory change
+        if inventory_change:
+            while current_inv_qt == new_inv:
+                if tries > 16:
+                    self.log_msg('No inventory change detected')
                     return False
-            
-            # the actual click
-            self.mouse.click()
-            
-            # If inventory change is true, execute while loop waiting for inventory change
-            if inventory_change:
-                while current_inv_qt == new_inv:
-                    if tries > 16:
-                        self.log_msg('No inventory change detected')
-                        return False
-                    time.sleep(1/10)
-                    tries = tries + 1
-                    new_inv = len(self.api_s.get_inv())
-   
-            # completed click successfull
-            return True
-        else:
-            # No pouch found on screen
-            self.log_msg('No pouch found on screen')
-            return False
+                time.sleep(1/10)
+                tries = tries + 1
+                new_inv = len(self.api_s.get_inv())
+
+        # completed click successfull
+        return True
     
     def maybe_drink_potion(self):
         if self.get_run_energy() < self.min_run_energy:
@@ -522,7 +530,7 @@ class OSRSAltar(OSRSBot):
             if stamina_potion1 := imsearch.search_img_in_rect(stamina_potion1_img, self.win.game_view):
                 # Found image
                 # self.log_msg('Move to potion')
-                self.mouse.move_to(stamina_potion1.random_point())
+                self.mouse.move_to(stamina_potion1.random_point(),mouseSpeed=self.mouse_speed)
             else:
                 self.log_msg('Failed to find stamina potions')
                 return False
@@ -541,7 +549,7 @@ class OSRSAltar(OSRSBot):
             if stamina_potion1 := imsearch.search_img_in_rect(stamina_potion1_img, self.win.control_panel):
                    # Found image
                 # self.log_msg('Move to potion')
-                self.mouse.move_to(stamina_potion1.random_point())
+                self.mouse.move_to(stamina_potion1.random_point(),mouseSpeed=self.mouse_speed)
             else:
                 self.log_msg('Failed to find stamina potions')
                 return False
@@ -575,7 +583,7 @@ class OSRSAltar(OSRSBot):
             
         # Find banker
         if banker:
-           
+            self.last_banker = banker
             # Set a var for keeping the while loop running
             bank_not_opened = True
             tries = 0
@@ -588,7 +596,7 @@ class OSRSAltar(OSRSBot):
                     self.log_msg('Failed to continue, stopping')
                     return False
                 
-                self.mouse.move_to(banker.random_point())
+                self.mouse.move_to(banker.random_point(),mouseSpeed=self.mouse_speed)
                 time.sleep(1/10)
                 # Does text match Bank?
                 if not self.mouseover_text(contains="Bank"):
@@ -600,19 +608,26 @@ class OSRSAltar(OSRSBot):
                     continue
 
                 self.mouse.click()
-              
-                deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
+                if self.deposit_rectangle:
+                    deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.deposit_rectangle)
+                else:
+                    deposit_all = False
                 # Waiting till player is idle
+                move_to = False
                 while not deposit_all:
-                    
+             
                     if not self.deposit_rectangle:
                         deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.win.game_view)
                         if deposit_all:
                             self.deposit_rectangle = deposit_all
+                            
                         else:
+                            if not move_to and self.deposit_rectangle:
+                                self.mouse.move_to(self.deposit_rectangle.random_point(),mouseSpeed=self.mouse_speed) 
                             time.sleep(1/10)
                             continue
                     else:
+                        
                         deposit_all = imsearch.search_img_in_rect(deposit_all_img, self.deposit_rectangle)
                         
                 
@@ -629,7 +644,7 @@ class OSRSAltar(OSRSBot):
                     
                         if deposit_all := imsearch.search_img_in_rect(deposit_all_img, self.win.game_view):
                             # Found image
-                            self.mouse.move_to(deposit_all.random_point())
+                            self.mouse.move_to(deposit_all.random_point(),mouseSpeed=self.mouse_speed)
                         else:
                             self.log_msg('Failed to find deposit all')
                             tries = tries + 1
@@ -642,17 +657,21 @@ class OSRSAltar(OSRSBot):
                     # Click to deposit
                     self.mouse.click()
 
-                    time.sleep(6/10)
+                    time.sleep(1/10)
 
                     while current_inv_qt == len(self.api_s.get_inv()):
-                        if tries > 5:
+                        if not move_to and self.insane_mode:
+                            move_to = True
+                            if self.bank_position_essence:
+                                self.mouse.move_to(self.bank_position_essence.random_point(),mouseSpeed=self.mouse_speed)
+                        if tries > 10:
                             self.log_msg('Failed to continue, stopping')
                             return False
-                        time.sleep(6/10)
+                        time.sleep(2/10)
                         tries = tries + 1
                 return True
                 
-    def click_altar(self, first = False):
+    def click_altar(self, first = False, insane_mode=False):
         tries = 0
         toggle_run = False
         # Find 
@@ -663,9 +682,9 @@ class OSRSAltar(OSRSBot):
             altar = self.get_nearest_tag(clr.PINK)
 
         altar_not_found = True
-        while altar_not_found:
-
-            self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
+        while not self.mouseover_text("Craft"):
+            altar = self.get_nearest_tag(clr.PINK)
+            self.mouse.move_to(altar.random_point(), mouseSpeed=self.mouse_speed)
             if first:
                 
                 self.mouse.right_click()
@@ -675,34 +694,40 @@ class OSRSAltar(OSRSBot):
                 craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
 
                 while not craft_runes:
-                    self.mouse.move_to(self.win.game_view.random_point())
+                    self.mouse.move_to(self.win.game_view.random_point(),mouseSpeed=self.mouse_speed)
                     altar = self.get_nearest_tag(clr.PINK)
                     if altar:
-                        self.mouse.move_to(altar.random_point(), mouseSpeed="fastest")
+                        self.mouse.move_to(altar.random_point(), mouseSpeed=self.mouse_speed)
                         self.mouse.right_click()
                     time.sleep(3/10)
                     craft_runes = imsearch.search_img_in_rect(craft_runes_img, self.win.game_view)
                     
                     
-                self.mouse.move_to(craft_runes.random_point(), mouseSpeed="fastest")
-            self.mouse.click()         
-            altar_not_found = False
-
+                self.mouse.move_to(craft_runes.random_point(), mouseSpeed=self.mouse_speed)
+                break
+                 
+        current_inv_qt = len(self.api_s.get_inv()) 
+        self.mouse.click()    
+        
         if first:
             time.sleep(3)
-        
-        current_inv_qt = len(self.api_s.get_inv())
-        
+            if insane_mode and "Colossal_pouch" in self.pouch:
+                self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
+        else:
+            if insane_mode and "Colossal_pouch" in self.pouch:
+                self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
+
         while current_inv_qt == len(self.api_s.get_inv()):
             if first:
                 if not self.invetory_open:
                     if rd.random_chance(probability=0.01):
                         # Click the inventory tab
-                        self.mouse.move_to(self.win.cp_tabs[3].random_point())
-                        self.mouse.click()
-                        self.invetory_open = True
+                        self.open_inventory()
+                        if insane_mode and "Colossal_pouch" in self.pouch:
+                            self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
                 if not toggle_run:
-                    self.toggle_run(toggle_on=True)
+                    
+                    #self.toggle_run(toggle_on=True)
                     toggle_run = True 
                 if tries > 300:
                     self.log_msg('Failed to complete lap')
@@ -716,9 +741,9 @@ class OSRSAltar(OSRSBot):
 
         if first:
             if not self.invetory_open:
-                self.mouse.move_to(self.win.cp_tabs[3].random_point())
-                self.mouse.click()
-                self.invetory_open = True
+                self.open_inventory()
+                if insane_mode and "Colossal_pouch" in self.pouch:
+                    self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
         return True
         
 
@@ -753,29 +778,30 @@ class OSRSAltar(OSRSBot):
                 return False
             
             # Moving mouse to ladder
-            self.mouse.move_to(ladder.random_point(), mouseSpeed="fastest")
+            self.mouse.move_to(ladder.random_point(), mouseSpeed=self.mouse_speed)
             time.sleep(1/10)
-            self.mouse.right_click()
-            time.sleep(1/10)
+            if not self.mouseover_text("Climb",color=clr.OFF_WHITE):
+                self.mouse.right_click()
+                time.sleep(1/10)
 
-            climb_ladder_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "climb_ladder.png")
-            climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
-
-            while not climb_ladder:
-                
-                
-                self.mouse.move_to(self.win.game_view.random_point())
-                ladder = self.get_nearest_tag(clr.BLUE)
-                if ladder:
-                    self.mouse.move_to(ladder.random_point())
-                    time.sleep(2/10)
-                    self.mouse.right_click()
-                time.sleep(2/10)
+                climb_ladder_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "climb_ladder.png")
                 climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
-                tries = tries + 1
-                
-                
-            self.mouse.move_to(climb_ladder.random_point(), mouseSpeed="fastest")
+
+                while not climb_ladder:
+                    
+                    
+                    self.mouse.move_to(self.win.game_view.random_point())
+                    ladder = self.get_nearest_tag(clr.BLUE)
+                    if ladder:
+                        self.mouse.move_to(ladder.random_point(),mouseSpeed=self.mouse_speed)
+                        time.sleep(2/10)
+                        self.mouse.right_click()
+                    time.sleep(2/10)
+                    climb_ladder = imsearch.search_img_in_rect(climb_ladder_img, self.win.game_view)
+                    tries = tries + 1
+                    
+                    
+                self.mouse.move_to(climb_ladder.random_point(), mouseSpeed=self.mouse_speed)
             
             # Found climb, clicking ladder
             self.mouse.click()
@@ -789,9 +815,9 @@ class OSRSAltar(OSRSBot):
                 if not self.invetory_open:
                     if rd.random_chance(probability=0.05):
                         # Click the inventory tab
-                        self.mouse.move_to(self.win.cp_tabs[3].random_point())
-                        self.mouse.click()
-                        self.invetory_open = True
+                        self.open_inventory()
+                        if self.last_banker:
+                            self.mouse.move_to(self.last_banker.random_point(),mouseSpeed=self.mouse_speed)
                 bank = self.get_nearest_tag(clr.CYAN)
                 if bank:
                     return True
