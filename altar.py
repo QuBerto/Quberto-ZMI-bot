@@ -111,7 +111,7 @@ class OSRSAltar(OSRSBot):
             xp_gained = self.api_m.get_skill_xp(skill="Runecraft") - self.starting_xp
             xp_per_hour = xp_gained * ((time.time() - start_time) / (60 * 60))
 
-            str_msg = "XP Gained: " + str( xp_gained ) + " ("+str(xp_per_hour)+" xp/h)"
+            str_msg = "XP Gained: " + str( xp_gained )
             self.log_msg(str_msg)
             
 
@@ -247,8 +247,8 @@ class OSRSAltar(OSRSBot):
 
                 else:
                     random_value = random.choice(not_clicked_pouch)
-                    self.click_pouch(type_pouch=random_value, inventory_change=True)
                     not_clicked_pouch.remove(random_value)
+                    self.click_pouch(type_pouch=random_value, inventory_change=True)
                     
         self.click_teleport()
         return True
