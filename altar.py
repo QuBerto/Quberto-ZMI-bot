@@ -320,7 +320,9 @@ class OSRSAltar(OSRSBot):
                 tries = 0
                 while not self.mouseover_text("Dark",color=clr.OFF_WHITE):
                     npc_contact = imsearch.search_img_in_rect(npc_contact_img, self.win.control_panel)
-                    self.mouse.move_to(npc_contact.random_point(),mouseSpeed=self.mouse_speed)
+                    if npc_contact:
+                        self.mouse.move_to(npc_contact.random_point(),mouseSpeed=self.mouse_speed)
+                    else:
                     tries = tries + 1
                     
                     if tries > 3:
@@ -493,7 +495,7 @@ class OSRSAltar(OSRSBot):
             self.debug('Waiting for inventory change: True')
 
         while not self.bank_position_essence:
-            self.bank_position_essence = imsearch.search_img_in_rect(pure_essence_img, self.win.game_view,confidence=0.05)
+            self.bank_position_essence = imsearch.search_img_in_rect(pure_essence_img, self.win.game_view)
 
     
 
