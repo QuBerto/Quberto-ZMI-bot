@@ -18,13 +18,13 @@ class OSRSAltar(OSRSBot):
         self.running_time = 1
         self.invetory_open = False
         self.api_m = MorgHTTPSocket()
-        self.api_s = StatusSocket()
+
         
     def create_options(self):
         self.options_builder.add_slider_option("running_time", "How long to run (minutes)?", 1, 360)
         self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
         self.options_builder.add_slider_option("panic_stop", "Low health threshold", 1, 99)
-        self.options_builder.add_dropdown_option("eat_food", "Eat lobsters when low health?", ["NONE","LOBSTER"])      
+        self.options_builder.add_dropdown_option("eat_food", "Eat lobsters when low health?", ["NONE","LOBSTER","SHARK"])      
         self.options_builder.add_checkbox_option("pouch","Use pouch?",["Small_pouch","Medium_pouch","Large_pouch","Giant_pouch","Colossal_pouch"])
         self.options_builder.add_slider_option("repair_after", "After how many rounds, pouches should be repaired?", 1, 20)
         self.options_builder.add_checkbox_option("repair_now", "Repair first round?", ["on"])  
@@ -251,7 +251,7 @@ class OSRSAltar(OSRSBot):
                 if "Colossal_pouch" in self.pouch:
 
                     self.click_pouch(type_pouch="Colossal_pouch", inventory_change=True,insane_mode=self.insane_mode)
-                    if len(self.api_s.get_inv()) == 28:
+                    if len(self.api_m.get_inv()) == 28:
                         continue
 
                     if len(self.api_s.get_inv()) != 28:
@@ -286,7 +286,7 @@ class OSRSAltar(OSRSBot):
                     food = False
                     while not food: 
                         food_img = imsearch.BOT_IMAGES.joinpath("altar_bot", "Lobster.png")
-                        food = imsearch.search_img_in_rect(food_img, self.win.game_view)       
+                        food = imsearch.search_img_in_rect(food_img, self.win.game_view,confidence=0.3)       
                         self.debug("No food found in bank. trying again.")
 
                     self.mouse.move_to(food.random_point(),mouseSpeed="fastest")
@@ -320,9 +320,7 @@ class OSRSAltar(OSRSBot):
                 tries = 0
                 while not self.mouseover_text("Dark",color=clr.OFF_WHITE):
                     npc_contact = imsearch.search_img_in_rect(npc_contact_img, self.win.control_panel)
-                    if npc_contact:
-                        self.mouse.move_to(npc_contact.random_point(),mouseSpeed=self.mouse_speed)
-                    else:
+                    self.mouse.move_to(npc_contact.random_point(),mouseSpeed=self.mouse_speed)
                     tries = tries + 1
                     
                     if tries > 3:
@@ -489,13 +487,13 @@ class OSRSAltar(OSRSBot):
 
         if inventory_change:
             # Save current inv quantity
-            current_inv_qt = len(self.api_s.get_inv())
+            current_inv_qt = len(self.api_m.get_inv())
             time.sleep((random.randint(100,200)/1000))
             new_inv = current_inv_qt
             self.debug('Waiting for inventory change: True')
 
         while not self.bank_position_essence:
-            self.bank_position_essence = imsearch.search_img_in_rect(pure_essence_img, self.win.game_view)
+            self.bank_position_essence = imsearch.search_img_in_rect(pure_essence_img, self.win.game_view,confidence=0.05)
 
     
 
@@ -527,7 +525,7 @@ class OSRSAltar(OSRSBot):
                     return False
                 time.sleep((random.randint(200,250)/1000))
                 tries = tries + 1
-                new_inv = len(self.api_s.get_inv())
+                new_inv = len(self.api_m.get_inv())
         
         # completed click successfull
         return True
@@ -536,7 +534,7 @@ class OSRSAltar(OSRSBot):
     def click_pouch(self, type_pouch , inventory_change = False, empty_fill = "Empty",insane_mode=False):
         if inventory_change:
             # Save current inv quantity
-            current_inv_qt = len(self.api_s.get_inv())
+            current_inv_qt = len(self.api_m.get_inv())
             time.sleep(1/10)
             new_inv = current_inv_qt
             self.debug('Waiting for inventory change: True')
@@ -576,7 +574,7 @@ class OSRSAltar(OSRSBot):
                     return False
                 time.sleep(1/10)
                 tries = tries + 1
-                new_inv = len(self.api_s.get_inv())
+                new_inv = len(self.api_m.get_inv())
 
         # completed click successfull
         return True
@@ -593,10 +591,10 @@ class OSRSAltar(OSRSBot):
                 return False
             
             # Save current inv quantity
-            current_inv_qt = len(self.api_s.get_inv())
+            current_inv_qt = len(self.api_m.get_inv())
             self.mouse.click()
             tries = 0
-            while current_inv_qt == len(self.api_s.get_inv()):
+            while current_inv_qt == len(self.api_m.get_inv()):
                 if tries > 5:
                     self.log_msg('Failed to continue, stopping')
                     return False
@@ -612,10 +610,10 @@ class OSRSAltar(OSRSBot):
                 return False
             
             # Save current inv quantity
-            current_inv_qt = len(self.api_s.get_inv())
+            current_inv_qt = len(self.api_m.get_inv())
             self.mouse.click()
 
-            while current_inv_qt == len(self.api_s.get_inv()):
+            while current_inv_qt == len(self.api_m.get_inv()):
                 if tries > 5:
                     self.log_msg('Failed to continue, stopping')
                     return False
@@ -690,7 +688,7 @@ class OSRSAltar(OSRSBot):
                 
                 self.debug("bank opened")
 
-                if len(self.api_s.get_inv()) > len(self.pouch) + 1:
+                if len(self.api_m.get_inv()) > len(self.pouch) + 1:
                     self.click_deposit()
                 return True
     def click_deposit(self):
@@ -714,14 +712,14 @@ class OSRSAltar(OSRSBot):
         
         
         # Save current inv quantity
-        current_inv_qt = len(self.api_s.get_inv())
+        current_inv_qt = len(self.api_m.get_inv())
 
         # Click to deposit
         self.mouse.click()
 
         time.sleep(1/10)
      
-        while current_inv_qt == len(self.api_s.get_inv()):
+        while current_inv_qt == len(self.api_m.get_inv()):
      
             if tries > 10:
                 self.log_msg('Failed to continue, stopping')
@@ -767,7 +765,7 @@ class OSRSAltar(OSRSBot):
                 self.mouse.move_to(craft_runes.random_point(), mouseSpeed=self.mouse_speed)
                 break
                  
-        current_inv_qt = len(self.api_s.get_inv()) 
+        current_inv_qt = len(self.api_m.get_inv()) 
         self.mouse.click()    
         
         if first:
@@ -778,7 +776,7 @@ class OSRSAltar(OSRSBot):
             if insane_mode and "Colossal_pouch" in self.pouch:
                 self.mouse.move_to(self.pouch_position["Colossal_pouch"].random_point(),mouseSpeed=self.mouse_speed)
 
-        while current_inv_qt == len(self.api_s.get_inv()):
+        while current_inv_qt == len(self.api_m.get_inv()):
             if first:
                 if not self.invetory_open:
                     if rd.random_chance(probability=0.01):
