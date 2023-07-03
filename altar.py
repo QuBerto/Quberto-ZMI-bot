@@ -254,7 +254,7 @@ class OSRSAltar(OSRSBot):
                     if len(self.api_m.get_inv()) == 28:
                         continue
 
-                    if len(self.api_s.get_inv()) != 28:
+                    if len(self.api_m.get_inv()) != 28:
                         if self.api_m.get_if_item_in_inv(ids.PURE_ESSENCE):
                             self.click_altar()
                         break
