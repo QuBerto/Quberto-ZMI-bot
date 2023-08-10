@@ -25,7 +25,7 @@ class OSRSAltar(OSRSBot):
         self.options_builder.add_slider_option("min_run_energy", "When to drink stamina potion", 1, 100)
         self.options_builder.add_slider_option("panic_stop", "Low health threshold", 1, 99)
         self.options_builder.add_dropdown_option("eat_food", "Eat lobsters when low health?", ["NONE","LOBSTER","SHARK"])      
-        self.options_builder.add_checkbox_option("pouch","Use pouch?",["Small_pouch","Medium_pouch","Large_pouch","Giant_pouch","Colossal_pouch"])
+        self.options_builder.add_checkbox_option("pouch","Use pouch?",["Giant_pouch","Large_pouch","Medium_pouch","Small_pouch","Colossal_pouch"])
         self.options_builder.add_slider_option("repair_after", "After how many rounds, pouches should be repaired?", 1, 20)
         self.options_builder.add_checkbox_option("repair_now", "Repair first round?", ["on"])  
         self.options_builder.add_checkbox_option("insane_mode", "Turn fast mode on?", ["on"])   
@@ -433,36 +433,7 @@ class OSRSAltar(OSRSBot):
             pyautogui.press('esc')  
             return True
             
-
         
-        if 'Small_pouch' in self.pouch:
-            self.debug("Small pouch")
-            if not self.click_pouch(type_pouch="Small_pouch", inventory_change=False, empty_fill="Fill"):
-                self.log_msg("Failed Small")
-                return False
-            # Click pure essence once
-            if not self.click_pure_essence():
-                return False
-        
-        
-        if 'Medium_pouch' in self.pouch:
-            self.debug("Medium pouch")
-            if not self.click_pouch(type_pouch="Medium_pouch", inventory_change=False, empty_fill="Fill"):
-                self.log_msg("Medium Failed")
-                return False
-            # Click pure essence once
-            if not self.click_pure_essence():
-                return False
-            
-        if 'Large_pouch' in self.pouch:
-            self.debug("Large pouch")
-            if not self.click_pouch(type_pouch="Large_pouch", inventory_change=False, empty_fill="Fill"):
-                self.log_msg("Large Failed")
-                return False
-            # Click pure essence once
-            if not self.click_pure_essence():
-                return False
-            
         if 'Giant_pouch' in self.pouch:
             self.debug("Giant pouch")
             if not self.click_pouch(type_pouch="Giant_pouch", inventory_change=False, empty_fill="Fill"):
@@ -471,6 +442,34 @@ class OSRSAltar(OSRSBot):
             # Click pure essence once
             if not self.click_pure_essence():
                 return False
+                
+        if 'Large_pouch' in self.pouch:
+            self.debug("Large pouch")
+            if not self.click_pouch(type_pouch="Large_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Large Failed")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+                
+        if 'Medium_pouch' in self.pouch:
+            self.debug("Medium pouch")
+            if not self.click_pouch(type_pouch="Medium_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Medium Failed")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+                
+        if 'Small_pouch' in self.pouch:
+            self.debug("Small pouch")
+            if not self.click_pouch(type_pouch="Small_pouch", inventory_change=False, empty_fill="Fill"):
+                self.log_msg("Failed Small")
+                return False
+            # Click pure essence once
+            if not self.click_pure_essence():
+                return False
+                
         # Success
         time.sleep((random.randint(1,200)/1000))
         pyautogui.press('esc')  
